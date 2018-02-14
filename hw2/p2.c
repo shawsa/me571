@@ -8,11 +8,12 @@ double foo(double x){
     return (x-1)*(x-1)*exp(-1*x*x);
 }
 
-double trap_rule(double x0, double x1, int n){
+double trap_rule(double x0, double x1, long n){
     double h = (x1 - x0)/n;
     double ret = 0.5*(foo(x0)+foo(x1));
     double step = (x1-x0)/n;
-    for(int i=1; i<n; i++){
+    int i;
+    for(i=1; i<n; i++){
         ret += foo(x0+step*i);
     }
     return ret*h;
@@ -34,11 +35,10 @@ int main(int argc, char** argv){
     //read arguments and broadcast
     int n;
     if(rank==0){
-        int p,N, err;
+        int p, err;
+        long N;
         read_int(argc,argv, "-p", &p, &err);
-        printf("p = %d\n", p);
         N = pow(2,p);
-        printf("N = %d\n", N);
         n = N/nprocs;
     }
     MPI_Status status;
