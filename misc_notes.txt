@@ -1,2 +1,0 @@
-https://stackoverflow.com/questions/10162707/how-to-close-ipython-notebook-properly
-jupyter notebook &> /dev/null &
