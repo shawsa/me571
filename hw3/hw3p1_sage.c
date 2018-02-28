@@ -21,6 +21,9 @@
 
 ********************************************************************/
 
+double foo(double x){
+    return -1*(2*PI)*(2*PI)*cos(2*PI*x);
+}
 
 
 int main(int argc, char** argv){  
@@ -64,14 +67,42 @@ int main(int argc, char** argv){
     for(i=0; i<M+2; i++){u[i]=0;}
 
     //Assign end conditions
+    if(rank==0){
+        u[0] = 1;
+    }else if(rank==nprocs-1){
+        u[M+1] = 1;
+    }
 
     //Iterate
-
+    int iter;
+    double diff, largest_diff, ri, xi;
+    for(iter=0; iter<itermax; iter++){
+        //hold replaced value
+        u_minus_old = u[0];
+        xi = a
         //perform a Jacobi iteration, keeping track of largest update difference
-
+        for(i=1; i<M+1; i++){
+            xi += h;
+            ri = u_minus_old - 2*u[i] + u[i+1] - h*h*foo(xi)
+            u_minus_old = u[i];
+            u[i] += 0.5*ri;
+            diff = abs(u[i] - u_minus_old);
+            if(diff>largest_diff){largest_diff = diff;}
+        }
         //find largest update difference and break if below tol
+        if(largest_diff<tol){break;}
 
         //Synchronize end conditions
+        if(rank!=0){
+            //receive left end condition
+        }
+        if(rank != nprocs-1){
+            //send right end condition
+            
+        }
+    }
+
+    //print output in order
     
     MPI_Finalize();
     return 0;
