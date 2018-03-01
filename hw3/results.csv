@@ -1,19 +1,18 @@
 p: 10
-itermax: 0
-tol: 0
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
-my M: 1024
+root itermax: 20
+output test: 0
+output test: 0.5
+output test: 0
+output test: 0
+output test: 0
+output test: 0
+output test: 0
+output test: 0
+output test: 0
+output test: 0
+output test: 0
+output test: 0
+output test: 0
+output test: 0
+output test: 0
+output test: 0

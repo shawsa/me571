@@ -22,7 +22,7 @@
 ********************************************************************/
 
 double foo(double x){
-    return -1*(2*PI)*(2*PI)*cos(2*PI*x);
+    return -1*(2*M_PI)*(2*M_PI)*cos(2*M_PI*x);
 }
 
 
@@ -36,6 +36,7 @@ int main(int argc, char** argv){
     MPI_Status status;
 
     int p, M, itermax;
+    itermax = 10;
     double tol;
     int err;
     if (rank == 0)
@@ -47,12 +48,15 @@ int main(int argc, char** argv){
 
         M = pow2(p);
 
-        printf("p: %d\n", p);
-        printf("itermax: %d\n", itermax);
-        printf("tol: %g\n", tol); 
+        printf("p: %d\n", p); 
+	printf("root itermax: %d\n", itermax);
     }
     MPI_Bcast(&M, 1, MPI_INT, 0, MPI_COMM_WORLD); 
-    printf("my M: %d\n", M);
+    MPI_Bcast(&itermax, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&tol, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    //printf("my M: %d\n", M);
+    //printf("itermax: %d\n", itermax);
+    //printf("tol: %g\n", tol);
 
     //Determine interval size
     double subint_size = 1/nprocs;
@@ -75,15 +79,15 @@ int main(int argc, char** argv){
 
     //Iterate
     int iter;
-    double diff, largest_diff, ri, xi;
+    double u_minus_old, diff, largest_diff, ri, xi;
     for(iter=0; iter<itermax; iter++){
         //hold replaced value
         u_minus_old = u[0];
-        xi = a
+        xi = a;
         //perform a Jacobi iteration, keeping track of largest update difference
         for(i=1; i<M+1; i++){
             xi += h;
-            ri = u_minus_old - 2*u[i] + u[i+1] - h*h*foo(xi)
+            ri = u_minus_old - 2*u[i] + u[i+1] - h*h*foo(xi);
             u_minus_old = u[i];
             u[i] += 0.5*ri;
             diff = abs(u[i] - u_minus_old);
@@ -103,6 +107,7 @@ int main(int argc, char** argv){
     }
 
     //print output in order
+    printf("output test: %g\n", u[1]);
     
     MPI_Finalize();
     return 0;
