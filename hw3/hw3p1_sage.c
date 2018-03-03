@@ -48,18 +48,17 @@ int main(int argc, char** argv){
 
         M = pow2(p);
 
-        printf("p: %d\n", p); 
-	printf("root itermax: %d\n", itermax);
     }
     MPI_Bcast(&M, 1, MPI_INT, 0, MPI_COMM_WORLD); 
     MPI_Bcast(&itermax, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    //printf("itermax %d\n", itermax);
     MPI_Bcast(&tol, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     //printf("my M: %d\n", M);
     //printf("itermax: %d\n", itermax);
     //printf("tol: %g\n", tol);
 
     //Determine interval size
-    double subint_size = 1/nprocs;
+    double subint_size = 1.0/nprocs;
     double a = subint_size*rank;
     double b = a + subint_size;
     double h = (b-a)/(M+1);
@@ -68,7 +67,7 @@ int main(int argc, char** argv){
 
     double u[M+2];
     int i;
-    for(i=0; i<M+2; i++){u[i]=0;}
+    for(i=0; i<M+2; i++){u[i]=-.3;}
 
     //Assign end conditions
     if(rank==0){
@@ -81,6 +80,7 @@ int main(int argc, char** argv){
     int iter;
     double u_minus_old, diff, largest_diff, ri, xi;
     for(iter=0; iter<itermax; iter++){
+        //printf("test\n");
         //hold replaced value
         u_minus_old = u[0];
         xi = a;
@@ -94,20 +94,40 @@ int main(int argc, char** argv){
             if(diff>largest_diff){largest_diff = diff;}
         }
         //find largest update difference and break if below tol
-        if(largest_diff<tol){break;}
+        //if(largest_diff<tol){break;}
 
         //Synchronize end conditions
         if(rank!=0){
-            //receive left end condition
+            //receive left boundary
+            MPI_Recv(&u[0], 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            //send left boundary
+            MPI_Send(&u[1], 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
         }
         if(rank != nprocs-1){
-            //send right end condition
-            
+            //send right boundary
+            MPI_Send(&u[M], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
+            //recieve left boundary
+            MPI_Recv(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
     }
 
     //print output in order
-    printf("output test: %g\n", u[1]);
+        if(rank==0){printf("%g\n",u[0]);}
+        if(rank!=0){
+            //wait for signal
+            MPI_Recv(&u[0], 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        //print array
+        for(i=1; i<M+1; i++){
+            printf("%g\n",u[i]);
+        }
+        if(rank != nprocs-1){
+            
+            //send signal
+            MPI_Send(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
+        }
+        if(rank==nprocs-1){printf("%g\n",u[M+1]);}
+    //printf("output test: %g\n", u[1]);
     
     MPI_Finalize();
     return 0;
