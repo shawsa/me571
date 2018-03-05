@@ -62,7 +62,7 @@ int main(int argc, char** argv){
 
     double u[M+2];
     int i;
-    for(i=0; i<M+2; i++){u[i]=0;}
+    for(i=0; i<M+2; i++){u[i]=.5;}
 
     //Assign end conditions
     if(rank==0){
@@ -98,15 +98,15 @@ int main(int argc, char** argv){
         //Synchronize end conditions
         if(rank!=0){
             //receive left boundary
-            MPI_Recv(&u[0], 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&(u[0]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             //send left boundary
-            MPI_Send(&u[1], 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+            MPI_Send(&(u[1]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
         }
         if(rank != nprocs-1){
             //send right boundary
-            MPI_Send(&u[M], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
+            MPI_Send(&(u[M]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
             //recieve right boundary
-            MPI_Recv(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&(u[M+1]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
     }
 
@@ -128,8 +128,9 @@ int main(int argc, char** argv){
             MPI_Send(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
         }
         if(rank==nprocs-1){
-            printf("%.19g\n",u[M+1]); 
+            printf("%.19g\n",u[M+1]);
             printf("%d\n", iter);
+            printf("%.19g\n",largest_diff_global);
         }
     //printf("output test: %g\n", u[1]);
     
