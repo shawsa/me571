@@ -33,7 +33,7 @@ int main(int argc, char** argv){
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-    MPI_Status status;
+    //MPI_Status status;
 
     int p, M, itermax;
     itermax = 10;
@@ -41,7 +41,6 @@ int main(int argc, char** argv){
     int err;
     if (rank == 0)
     {        
-        int m,err,loglevel;
         read_int(argc,argv, "-p", &p, &err);        
         read_int(argc,argv, "--itermax", &itermax, &err);
         read_double(argc,argv, "--tol", &tol, &err);   
@@ -51,11 +50,7 @@ int main(int argc, char** argv){
     }
     MPI_Bcast(&M, 1, MPI_INT, 0, MPI_COMM_WORLD); 
     MPI_Bcast(&itermax, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    //printf("itermax %d\n", itermax);
     MPI_Bcast(&tol, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    //printf("my M: %d\n", M);
-    //printf("itermax: %d\n", itermax);
-    //printf("tol: %g\n", tol);
 
     //Determine interval size
     double subint_size = 1.0/nprocs;
@@ -67,20 +62,21 @@ int main(int argc, char** argv){
 
     double u[M+2];
     int i;
-    for(i=0; i<M+2; i++){u[i]=-.3;}
+    for(i=0; i<M+2; i++){u[i]=0;}
 
     //Assign end conditions
     if(rank==0){
         u[0] = 1;
-    }else if(rank==nprocs-1){
+    }
+    if(rank==nprocs-1){
         u[M+1] = 1;
     }
 
     //Iterate
     int iter;
-    double u_minus_old, diff, largest_diff, ri, xi;
+    double u_minus_old, diff, largest_diff_global, largest_diff, ri, xi;
     for(iter=0; iter<itermax; iter++){
-        //printf("test\n");
+        largest_diff = 0;
         //hold replaced value
         u_minus_old = u[0];
         xi = a;
@@ -90,11 +86,14 @@ int main(int argc, char** argv){
             ri = u_minus_old - 2*u[i] + u[i+1] - h*h*foo(xi);
             u_minus_old = u[i];
             u[i] += 0.5*ri;
-            diff = abs(u[i] - u_minus_old);
+            diff = fabs(u[i] - u_minus_old);
+            //printf("my diff: %g\n", diff);
             if(diff>largest_diff){largest_diff = diff;}
         }
         //find largest update difference and break if below tol
-        //if(largest_diff<tol){break;}
+        MPI_Reduce(&largest_diff, &largest_diff_global, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&largest_diff_global, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD); 
+        if(largest_diff_global < tol){break;}
 
         //Synchronize end conditions
         if(rank!=0){
@@ -106,27 +105,32 @@ int main(int argc, char** argv){
         if(rank != nprocs-1){
             //send right boundary
             MPI_Send(&u[M], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
-            //recieve left boundary
+            //recieve right boundary
             MPI_Recv(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
     }
 
     //print output in order
-        if(rank==0){printf("%g\n",u[0]);}
+        if(rank==0){
+            printf("%.19g\n",u[0]);
+        }
         if(rank!=0){
             //wait for signal
             MPI_Recv(&u[0], 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
         //print array
         for(i=1; i<M+1; i++){
-            printf("%g\n",u[i]);
+            printf("%.19g\n",u[i]);
         }
         if(rank != nprocs-1){
             
             //send signal
             MPI_Send(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
         }
-        if(rank==nprocs-1){printf("%g\n",u[M+1]);}
+        if(rank==nprocs-1){
+            printf("%.19g\n",u[M+1]); 
+            printf("%d\n", iter);
+        }
     //printf("output test: %g\n", u[1]);
     
     MPI_Finalize();
