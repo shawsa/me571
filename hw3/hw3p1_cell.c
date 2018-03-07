@@ -53,8 +53,8 @@ int main(int argc, char** argv){
     MPI_Bcast(&tol, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     //Determine interval size
-    double h = 1.0/(M*nprocs+1);
-    double subint_size = (M+1)*h;
+    double h = 1.0/(M*nprocs);
+    double subint_size = 1.0/nprocs; //(M+1)*h;
     double a = M*h*rank;    
 
     //Initialize empty vectors
@@ -65,10 +65,10 @@ int main(int argc, char** argv){
 
     //Assign end conditions
     if(rank==0){
-        u[0] = 1;
+        u[0] = 2;
     }
     if(rank==nprocs-1){
-        u[M+1] = 1;
+        u[M+1] = 2;
     }
 
     //Iterate
@@ -78,7 +78,7 @@ int main(int argc, char** argv){
         largest_diff = 0;
         //hold replaced value
         u_minus_old = u[0];
-        xi = a;
+        xi = a - h/2;
         //perform a Jacobi iteration, keeping track of largest update difference
         for(i=1; i<M+1; i++){
             xi += h;
@@ -100,18 +100,22 @@ int main(int argc, char** argv){
             MPI_Recv(&(u[0]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             //send left boundary
             MPI_Send(&(u[1]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+        }else{
+            u[0] = 2 - u[1]; //update boundary ghost node
         }
         if(rank != nprocs-1){
             //send right boundary
             MPI_Send(&(u[M]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
             //recieve right boundary
             MPI_Recv(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }else{
+            u[M+1] = 2 - u[M]; //update boundary ghost node
         }
     }
 
     //print output in order
         if(rank==0){
-            printf("%.19g\n",u[0]);
+            //printf("%.19g\n",u[0]);
         }
         if(rank!=0){
             //wait for signal
@@ -127,7 +131,7 @@ int main(int argc, char** argv){
             MPI_Send(&(u[M+1]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
         }
         if(rank==nprocs-1){
-            printf("%.19g\n",u[M+1]);
+            //printf("%.19g\n",u[M+1]);
             printf("%d\n", iter);
             printf("%.19g\n",largest_diff_global);
         }

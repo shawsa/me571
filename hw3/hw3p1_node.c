@@ -5,6 +5,8 @@
 
 /********************************************************************
 
+    Donna's Node Centered Approach
+
     f(x) denotes the forcing term
     Au=b is the linear system we're solving
     M = 2^p is the number of unknowns per process
@@ -12,6 +14,9 @@
 
     Each process will have M+2 nodes stored. M interior nodes and 
         2 end point nodes that it will synchronize at each iteration.
+        Except the last process. The last process will have M-2 interior
+        nodes making the total number of distinct nodes (including the
+        boundary) M*nprocs - a power of 2.
 
     Residuals and updates will be computed on the fly to conserve memory.
 
@@ -51,13 +56,18 @@ int main(int argc, char** argv){
     MPI_Bcast(&M, 1, MPI_INT, 0, MPI_COMM_WORLD); 
     MPI_Bcast(&itermax, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&tol, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    
+    
 
     //Determine interval size
-    double h = 1.0/(M*nprocs+1);
+    double h = 1.0/(M*nprocs-1);
     double subint_size = (M+1)*h;
     double a = M*h*rank;    
 
     //Initialize empty vectors
+    
+    //last proc has two fewer nodes
+    if(rank==nprocs-1){M-=2;}
 
     double u[M+2];
     int i;
