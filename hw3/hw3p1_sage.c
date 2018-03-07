@@ -53,16 +53,19 @@ int main(int argc, char** argv){
     MPI_Bcast(&tol, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     //Determine interval size
-    double subint_size = 1.0/nprocs;
-    double a = subint_size*rank;
-    double b = a + subint_size;
-    double h = (b-a)/(M+1);
+    //double subint_size = 1.0/nprocs;
+    double h = 1.0/(M*nprocs+1);
+    double subint_size = (M+1)*h;
+    double a = M*h*rank;
+    //if(rank !=0 ){a -= h;} //This acounts for the overlap ghost node.
+    //double b = a + subint_size;
+    
 
     //Initialize empty vectors
 
     double u[M+2];
     int i;
-    for(i=0; i<M+2; i++){u[i]=.5;}
+    for(i=0; i<M+2; i++){u[i]=0;}
 
     //Assign end conditions
     if(rank==0){
@@ -90,6 +93,7 @@ int main(int argc, char** argv){
             //printf("my diff: %g\n", diff);
             if(diff>largest_diff){largest_diff = diff;}
         }
+
         //find largest update difference and break if below tol
         MPI_Reduce(&largest_diff, &largest_diff_global, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
         MPI_Bcast(&largest_diff_global, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD); 
@@ -103,10 +107,27 @@ int main(int argc, char** argv){
             MPI_Send(&(u[1]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
         }
         if(rank != nprocs-1){
+        
+            /*
+            printf("before sync - rank: %d\n",rank);
+            for(i=0; i<M+2; i++){
+                printf("%g\t", u[i]);
+            }
+            printf("\n");
+*/
+
             //send right boundary
             MPI_Send(&(u[M]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
             //recieve right boundary
-            MPI_Recv(&(u[M+1]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            
+            /*
+            printf("after sync - rank: %d\n",rank);
+            for(i=0; i<M+2; i++){
+                printf("%g\t", u[i]);
+            }
+            printf("\n");
+            */
         }
     }
 
@@ -125,7 +146,7 @@ int main(int argc, char** argv){
         if(rank != nprocs-1){
             
             //send signal
-            MPI_Send(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
+            MPI_Send(&(u[M+1]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
         }
         if(rank==nprocs-1){
             printf("%.19g\n",u[M+1]);
@@ -136,4 +157,13 @@ int main(int argc, char** argv){
     
     MPI_Finalize();
     return 0;
+
+    /*
+        printf("rank: %d\n",rank);
+        for(i=0; i<M+1; i++){
+            printf("%g\t", u[i]);
+        }
+        printf("\n");
+    */
+    
 }
