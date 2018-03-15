@@ -60,21 +60,18 @@ int main(int argc, char** argv){
     
 
     //Determine interval size
-    double h = 1.0/(M*nprocs);
-    double subint_size = (M)*h;
+    double h = 1.0/(M*nprocs-1);
+    double subint_size = (M+1)*h;
     double a = M*h*rank;    
-    
-    //last proc has one fewer nodes
-    if(rank==nprocs-1){M-=1;}
 
     //Initialize empty vectors
+    
+    //last proc has two fewer nodes
+    if(rank==nprocs-1){M-=2;}
+
     double u[M+2];
-    double r[M+2];
     int i;
-    for(i=0; i<M+2; i++){
-        u[i]=0;
-        r[i]=0;
-    }
+    for(i=0; i<M+2; i++){u[i]=0;}
 
     //Assign end conditions
     if(rank==0){
@@ -86,48 +83,21 @@ int main(int argc, char** argv){
 
     //Iterate
     int iter;
-    double u_old, diff, largest_diff_global, largest_diff, xi;
+    double u_minus_old, diff, largest_diff_global, largest_diff, ri, xi;
     for(iter=0; iter<itermax; iter++){
         largest_diff = 0;
+        //hold replaced value
+        u_minus_old = u[0];
         xi = a;
-        //perform a GS iteration, keeping track of largest update difference
-        //calculate residual
+        //perform a Jacobi iteration, keeping track of largest update difference
         for(i=1; i<M+1; i++){
             xi += h;
-            r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
-        }
-//Evens vs Odds first - same results
-#if 1
-        //loop through odds
-        for(i=1; i<M+1; i+=2){
-            u_old = u[i];
-            u[i] += 0.5*r[i];
-            diff = fabs(u[i] - u_old);
+            ri = u_minus_old - 2*u[i] + u[i+1] - h*h*foo(xi);
+            u_minus_old = u[i];
+            u[i] += 0.5*ri;
+            diff = fabs(u[i] - u_minus_old);
             if(diff>largest_diff){largest_diff = diff;}
         }
-        //loop through evens
-        for(i=2; i<M+1; i+=2){
-            u_old = u[i];
-            u[i] += 0.5*(r[i] +0.5*r[i-1] + 0.5*r[i+1]);
-            diff = fabs(u[i] - u_old);
-            if(diff>largest_diff){largest_diff = diff;}
-        }
-#else
-        //loop through evens
-        for(i=2; i<M+1; i+=2){
-            u_old = u[i];
-            u[i] += 0.5*r[i];
-            diff = fabs(u[i] - u_old);
-            if(diff>largest_diff){largest_diff = diff;}
-        }
-        //loop through odds
-        for(i=1; i<M+1; i+=2){
-            u_old = u[i];
-            u[i] += 0.5*(r[i] +0.5*r[i-1] + 0.5*r[i+1]);
-            diff = fabs(u[i] - u_old);
-            if(diff>largest_diff){largest_diff = diff;}
-        }
-#endif
 
         //find largest update difference and break if below tol
         MPI_Reduce(&largest_diff, &largest_diff_global, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);

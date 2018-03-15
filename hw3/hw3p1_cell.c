@@ -54,7 +54,7 @@ int main(int argc, char** argv){
 
     //Determine interval size
     double h = 1.0/(M*nprocs);
-    double subint_size = 1.0/nprocs; //(M+1)*h;
+    double subint_size = 1.0/nprocs;
     double a = M*h*rank;    
 
     //Initialize empty vectors

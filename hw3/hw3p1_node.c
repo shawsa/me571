@@ -60,14 +60,14 @@ int main(int argc, char** argv){
     
 
     //Determine interval size
-    double h = 1.0/(M*nprocs-1);
-    double subint_size = (M+1)*h;
+    double h = 1.0/(M*nprocs);
+    double subint_size = (M)*h;
     double a = M*h*rank;    
 
     //Initialize empty vectors
     
-    //last proc has two fewer nodes
-    if(rank==nprocs-1){M-=2;}
+    //last proc has one fewer nodes
+    if(rank==nprocs-1){M-=1;}
 
     double u[M+2];
     int i;
