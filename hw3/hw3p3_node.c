@@ -57,21 +57,30 @@ int main(int argc, char** argv){
     MPI_Bcast(&itermax, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&tol, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     
+    //last proc has one fewer nodes
+    if(rank==nprocs-1){M-=1;}
     
 
     //Determine interval size
-    double h = 1.0/(M*nprocs-1);
-    double subint_size = (M+1)*h;
+    double h = 1.0/(M*nprocs);
+    double subint_size = (M)*h;
     double a = M*h*rank;    
 
     //Initialize empty vectors
-    
-    //last proc has two fewer nodes
-    if(rank==nprocs-1){M-=2;}
 
     double u[M+2];
+    double r[M+2];
+    double s[M+2];
+    double pk[M+2];
     int i;
-    for(i=0; i<M+2; i++){u[i]=0;}
+    for(i=0; i<M+2; i++){
+        u[i]=0;
+        r[i]=0;
+        s[i]=0;
+        pk[i]=0;
+    }
+    
+    
 
     //Assign end conditions
     if(rank==0){
@@ -81,23 +90,83 @@ int main(int argc, char** argv){
         u[M+1] = 1;
     }
 
-    //Iterate
     int iter;
-    double u_minus_old, diff, largest_diff_global, largest_diff, ri, xi;
+    double u_old, diff, largest_diff_global, largest_diff, xi;
+//CG setup
+    double alpha, delta_new, delta_old, temp;
+    xi = a;
+    //calculate the residual and p
+    for(i=1; i<M+1; i++){
+        xi += h;
+        r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
+        pk[i] = r[i];
+    }
+    
+    if(rank==0){
+    for(i=1; i<M+1; i++){
+        //printf("i: %d\t ri: %f\n", i, r[i]);
+    }}
+    
+    //calculate first delta
+    delta_old = 0;
+    for(i=1; i<M+1; i++){
+        delta_old += r[i]*r[i];
+    }
+    MPI_Allreduce(&delta_old, &temp, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    delta_old = temp;
+    //if(rank==0){printf("delta: %f\n",delta_old);}
+    
+//CG iterations
     for(iter=0; iter<itermax; iter++){
-        largest_diff = 0;
-        //hold replaced value
-        u_minus_old = u[0];
-        xi = a;
-        //perform a Jacobi iteration, keeping track of largest update difference
+        //perform a CG iteration, keeping track of largest update difference
+        //calculate residual
+        /*
+        xi = a - h/2;
         for(i=1; i<M+1; i++){
             xi += h;
-            ri = u_minus_old - 2*u[i] + u[i+1] - h*h*foo(xi);
-            u_minus_old = u[i];
-            u[i] += 0.5*ri;
-            diff = fabs(u[i] - u_minus_old);
-            if(diff>largest_diff){largest_diff = diff;}
+            r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
         }
+        */
+        //calculate s
+        for(i=1; i<M+1; i++){
+            s[i] = 2*pk[i] - pk[i-1] - pk[i+1];
+        }
+        //calculate alpha
+        alpha = 0;
+        for(i=1; i<M+1; i++){
+            alpha += pk[i]*s[i];
+        }
+        MPI_Allreduce(&alpha, &temp, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        alpha = delta_old/temp;
+        //if(rank==0){printf("alpha: %f\n",alpha);}
+        //update u, r, and largest diff
+        largest_diff = 0;
+        for(i=1; i<M+1; i++){
+            u[i] += alpha*pk[i];
+            if(fabs(alpha*pk[i]) > largest_diff){largest_diff = fabs(alpha*pk[i]);}
+            //r[i] -= alpha*s[i];
+        }
+        xi = a;
+        for(i=1; i<M+1; i++){
+            xi += h;
+            r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
+        }
+        //calculate delta new
+        delta_new = 0;
+        for(i=1; i<M+1; i++){
+            delta_new += r[i]*r[i];
+        }
+        MPI_Allreduce(&temp, &delta_new, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        delta_new = temp;
+        //update p
+        for(i=1; i<M+1; i++){
+            pk[i] = r[i] + delta_new/delta_old*pk[i];
+        }
+        //update delta old
+        delta_old = delta_new;
+        
+        
+//End GC
 
         //find largest update difference and break if below tol
         MPI_Reduce(&largest_diff, &largest_diff_global, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
