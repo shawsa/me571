@@ -57,14 +57,16 @@ int main(int argc, char** argv){
     MPI_Bcast(&itermax, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&tol, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     
-    //last proc has one fewer nodes
-    if(rank==nprocs-1){M-=1;}
+    
     
 
     //Determine interval size
     double h = 1.0/(M*nprocs);
     double subint_size = (M)*h;
     double a = M*h*rank;    
+
+    //last proc has one fewer nodes
+    if(rank==nprocs-1){M-=1;}
 
     //Initialize empty vectors
 
@@ -94,18 +96,53 @@ int main(int argc, char** argv){
     double u_old, diff, largest_diff_global, largest_diff, xi;
 //CG setup
     double alpha, delta_new, delta_old, temp;
-    xi = a;
     //calculate the residual and p
+    xi = a;
     for(i=1; i<M+1; i++){
         xi += h;
         r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
         pk[i] = r[i];
+
     }
     
     if(rank==0){
     for(i=1; i<M+1; i++){
         //printf("i: %d\t ri: %f\n", i, r[i]);
     }}
+
+
+
+
+
+
+/*
+
+if(rank==0){
+            printf("%.19g\n",r[0]);
+        }
+        if(rank!=0){
+            //wait for signal
+            MPI_Recv(&u[0], 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        //print array
+        for(i=1; i<M+1; i++){
+            printf("%.19g\n",r[i]);
+        }
+        if(rank != nprocs-1){
+            
+            //send signal
+            MPI_Send(&(u[M+1]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
+        }
+        if(rank==nprocs-1){
+            printf("%.19g\n",r[M+1]);
+            printf("%d\n", iter);
+            printf("%.19g\n",largest_diff_global);
+        }
+
+*/
+
+
+
     
     //calculate first delta
     delta_old = 0;
@@ -114,7 +151,7 @@ int main(int argc, char** argv){
     }
     MPI_Allreduce(&delta_old, &temp, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     delta_old = temp;
-    //if(rank==0){printf("delta: %f\n",delta_old);}
+//if(rank==0){printf("delta: %f\n",delta_old);}
     
 //CG iterations
     for(iter=0; iter<itermax; iter++){
@@ -131,26 +168,36 @@ int main(int argc, char** argv){
         for(i=1; i<M+1; i++){
             s[i] = 2*pk[i] - pk[i-1] - pk[i+1];
         }
+
         //calculate alpha
         alpha = 0;
         for(i=1; i<M+1; i++){
             alpha += pk[i]*s[i];
+if(iter==1){
+printf("i: %d\t pi: %f\t si: %f\n", i,pk[i], s[i]);
+}
         }
+//printf("rank: %d\t alpha %f\n",rank,alpha);
         MPI_Allreduce(&alpha, &temp, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         alpha = delta_old/temp;
-        //if(rank==0){printf("alpha: %f\n",alpha);}
+//if(rank==0){printf("alpha: %f\n",alpha);}
         //update u, r, and largest diff
         largest_diff = 0;
         for(i=1; i<M+1; i++){
             u[i] += alpha*pk[i];
             if(fabs(alpha*pk[i]) > largest_diff){largest_diff = fabs(alpha*pk[i]);}
-            //r[i] -= alpha*s[i];
+            r[i] -= alpha*s[i];
         }
+/*
         xi = a;
         for(i=1; i<M+1; i++){
             xi += h;
             r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
+
         }
+*/
+
+
         //calculate delta new
         delta_new = 0;
         for(i=1; i<M+1; i++){
