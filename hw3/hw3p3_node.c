@@ -5,24 +5,7 @@
 
 /********************************************************************
 
-    Donna's Node Centered Approach
-
-    f(x) denotes the forcing term
-    Au=b is the linear system we're solving
-    M = 2^p is the number of unknowns per process
-    N = M*procs is the total number of unkowns (or interior nodes)
-
-    Each process will have M+2 nodes stored. M interior nodes and 
-        2 end point nodes that it will synchronize at each iteration.
-        Except the last process. The last process will have M-2 interior
-        nodes making the total number of distinct nodes (including the
-        boundary) M*nprocs - a power of 2.
-
-    Residuals and updates will be computed on the fly to conserve memory.
-
-    The convention will be that each process recieves their left endpoint
-        from the previous process before passing on their right end point
-        to the next process.
+    
 
 ********************************************************************/
 
@@ -82,8 +65,6 @@ int main(int argc, char** argv){
         pk[i]=0;
     }
     
-    
-
     //Assign end conditions
     if(rank==0){
         u[0] = 1;
@@ -102,46 +83,20 @@ int main(int argc, char** argv){
         xi += h;
         r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
         pk[i] = r[i];
-
     }
-    
-    if(rank==0){
-    for(i=1; i<M+1; i++){
-        //printf("i: %d\t ri: %f\n", i, r[i]);
-    }}
-
-
-
-
-
-
-/*
-
-if(rank==0){
-            printf("%.19g\n",r[0]);
-        }
-        if(rank!=0){
-            //wait for signal
-            MPI_Recv(&u[0], 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        }
-        //print array
-        for(i=1; i<M+1; i++){
-            printf("%.19g\n",r[i]);
-        }
-        if(rank != nprocs-1){
-            
-            //send signal
-            MPI_Send(&(u[M+1]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
-        }
-        if(rank==nprocs-1){
-            printf("%.19g\n",r[M+1]);
-            printf("%d\n", iter);
-            printf("%.19g\n",largest_diff_global);
-        }
-
-*/
-
-
+    //communicate ps to ghost nodes
+    if(rank!=0){
+        //receive left boundary
+        MPI_Recv(&(pk[0]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        //send left boundary
+        MPI_Send(&(pk[1]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+    }
+    if(rank != nprocs-1){
+        //send right boundary
+        MPI_Send(&(pk[M]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
+        //recieve right boundary
+        MPI_Recv(&pk[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
 
     
     //calculate first delta
@@ -151,19 +106,10 @@ if(rank==0){
     }
     MPI_Allreduce(&delta_old, &temp, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     delta_old = temp;
-//if(rank==0){printf("delta: %f\n",delta_old);}
     
 //CG iterations
     for(iter=0; iter<itermax; iter++){
         //perform a CG iteration, keeping track of largest update difference
-        //calculate residual
-        /*
-        xi = a - h/2;
-        for(i=1; i<M+1; i++){
-            xi += h;
-            r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
-        }
-        */
         //calculate s
         for(i=1; i<M+1; i++){
             s[i] = 2*pk[i] - pk[i-1] - pk[i+1];
@@ -173,14 +119,12 @@ if(rank==0){
         alpha = 0;
         for(i=1; i<M+1; i++){
             alpha += pk[i]*s[i];
-if(iter==1){
-printf("i: %d\t pi: %f\t si: %f\n", i,pk[i], s[i]);
-}
         }
-//printf("rank: %d\t alpha %f\n",rank,alpha);
         MPI_Allreduce(&alpha, &temp, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         alpha = delta_old/temp;
+        
 //if(rank==0){printf("alpha: %f\n",alpha);}
+
         //update u, r, and largest diff
         largest_diff = 0;
         for(i=1; i<M+1; i++){
@@ -188,30 +132,33 @@ printf("i: %d\t pi: %f\t si: %f\n", i,pk[i], s[i]);
             if(fabs(alpha*pk[i]) > largest_diff){largest_diff = fabs(alpha*pk[i]);}
             r[i] -= alpha*s[i];
         }
-/*
-        xi = a;
-        for(i=1; i<M+1; i++){
-            xi += h;
-            r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
-
-        }
-*/
-
 
         //calculate delta new
         delta_new = 0;
         for(i=1; i<M+1; i++){
             delta_new += r[i]*r[i];
         }
-        MPI_Allreduce(&temp, &delta_new, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(&delta_new, &temp, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         delta_new = temp;
         //update p
         for(i=1; i<M+1; i++){
-            pk[i] = r[i] + delta_new/delta_old*pk[i];
+            pk[i] = r[i] + delta_new / delta_old *pk[i];
+        }
+        //communicate ps to ghost nodes
+        if(rank!=0){
+            //receive left boundary
+            MPI_Recv(&(pk[0]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            //send left boundary
+            MPI_Send(&(pk[1]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+        }
+        if(rank != nprocs-1){
+            //send right boundary
+            MPI_Send(&(pk[M]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
+            //recieve right boundary
+            MPI_Recv(&pk[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
         //update delta old
-        delta_old = delta_new;
-        
+        delta_old = delta_new;        
         
 //End GC
 
@@ -257,17 +204,8 @@ printf("i: %d\t pi: %f\t si: %f\n", i,pk[i], s[i]);
             printf("%d\n", iter);
             printf("%.19g\n",largest_diff_global);
         }
-    //printf("output test: %g\n", u[1]);
     
     MPI_Finalize();
     return 0;
-
-    /*
-        printf("rank: %d\n",rank);
-        for(i=0; i<M+1; i++){
-            printf("%g\t", u[i]);
-        }
-        printf("\n");
-    */
     
 }
