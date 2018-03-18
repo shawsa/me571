@@ -96,8 +96,20 @@ int main(int argc, char** argv){
             xi += h;
             r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
         }
-//Evens vs Odds first - same results
-#if 1
+        //Synchronize r
+        if(rank!=0){
+            //receive left boundary
+            MPI_Recv(&(r[0]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            //send left boundary
+            MPI_Send(&(r[1]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+        }
+        if(rank != nprocs-1){
+            //send right boundary
+            MPI_Send(&(r[M]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
+            //recieve right boundary
+            MPI_Recv(&r[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        
         //loop through odds
         for(i=1; i<M+1; i+=2){
             u_old = u[i];
@@ -112,22 +124,6 @@ int main(int argc, char** argv){
             diff = fabs(u[i] - u_old);
             if(diff>largest_diff){largest_diff = diff;}
         }
-#else
-        //loop through evens
-        for(i=2; i<M+1; i+=2){
-            u_old = u[i];
-            u[i] += 0.5*r[i];
-            diff = fabs(u[i] - u_old);
-            if(diff>largest_diff){largest_diff = diff;}
-        }
-        //loop through odds
-        for(i=1; i<M+1; i+=2){
-            u_old = u[i];
-            u[i] += 0.5*(r[i] +0.5*r[i-1] + 0.5*r[i+1]);
-            diff = fabs(u[i] - u_old);
-            if(diff>largest_diff){largest_diff = diff;}
-        }
-#endif
 
         //find largest update difference and break if below tol
         MPI_Reduce(&largest_diff, &largest_diff_global, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);

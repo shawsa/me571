@@ -54,14 +54,18 @@ int main(int argc, char** argv){
 
     //Determine interval size
     double h = 1.0/(M*nprocs);
-    double subint_size = 1.0/nprocs;
+    double subint_size = 1.0/nprocs; //(M+1)*h;
     double a = M*h*rank;    
 
     //Initialize empty vectors
 
     double u[M+2];
+    double r[M+2];
     int i;
-    for(i=0; i<M+2; i++){u[i]=0;}
+    for(i=0; i<M+2; i++){
+        u[i]=0;
+        r[i]=0;
+    }
 
     //Assign end conditions
     if(rank==0){
@@ -73,29 +77,31 @@ int main(int argc, char** argv){
 
     //Iterate
     int iter;
-    double diag;
-    double u_minus_old, diff, largest_diff_global, largest_diff, ri, xi;
+    double u_old, diff, largest_diff_global, largest_diff, xi;
     for(iter=0; iter<itermax; iter++){
         largest_diff = 0;
-        //hold replaced value
-        u_minus_old = u[0];
         xi = a - h/2;
-        //perform a Jacobi iteration, keeping track of largest update difference
+        //perform a GS iteration, keeping track of largest update difference
+        //calculate residual
         for(i=1; i<M+1; i++){
-            if( rank==0 && i==1){
-                diag = 3;
-            }else if(rank==nprocs-1 && i==M){
-                diag = 3;
-            }else{
-                diag = 2;
-            }
             xi += h;
-            ri = u_minus_old - diag*u[i] + u[i+1] - h*h*foo(xi);
-            u_minus_old = u[i];
-            u[i] += 1.0/diag *ri;
-            diff = fabs(u[i] - u_minus_old);
+            r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
+        }
+        //loop through odds
+        for(i=1; i<M+1; i+=2){
+            u_old = u[i];
+            u[i] += 0.5*r[i];
+            diff = fabs(u[i] - u_old);
             if(diff>largest_diff){largest_diff = diff;}
         }
+        //loop through evens
+        for(i=2; i<M+1; i+=2){
+            u_old = u[i];
+            u[i] += 0.5*(r[i] +0.5*r[i-1] + 0.5*r[i+1]);
+            diff = fabs(u[i] - u_old);
+            if(diff>largest_diff){largest_diff = diff;}
+        }
+        
 
         //find largest update difference and break if below tol
         MPI_Reduce(&largest_diff, &largest_diff_global, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
@@ -108,12 +114,16 @@ int main(int argc, char** argv){
             MPI_Recv(&(u[0]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             //send left boundary
             MPI_Send(&(u[1]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+        }else{
+            u[0] = 2 - u[1]; //update boundary ghost node
         }
         if(rank != nprocs-1){
             //send right boundary
             MPI_Send(&(u[M]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
             //recieve right boundary
             MPI_Recv(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }else{
+            u[M+1] = 2 - u[M]; //update boundary ghost node
         }
     }
 

@@ -54,7 +54,7 @@ int main(int argc, char** argv){
 
     //Determine interval size
     double h = 1.0/(M*nprocs);
-    double subint_size = 1.0/nprocs; //(M+1)*h;
+    double subint_size = 1.0/nprocs;
     double a = M*h*rank;    
 
     //Initialize empty vectors
@@ -74,9 +74,10 @@ int main(int argc, char** argv){
     if(rank==nprocs-1){
         u[M+1] = 2;
     }
-
+    
     //Iterate
     int iter;
+    double diag;
     double u_old, diff, largest_diff_global, largest_diff, xi;
     for(iter=0; iter<itermax; iter++){
         largest_diff = 0;
@@ -84,24 +85,58 @@ int main(int argc, char** argv){
         //perform a GS iteration, keeping track of largest update difference
         //calculate residual
         for(i=1; i<M+1; i++){
+            if( rank==0 && i==1){
+                diag = 3;
+            }else if(rank==nprocs-1 && i==M){
+                diag = 3;
+            }else{
+                diag = 2;
+            }
             xi += h;
-            r[i] = u[i-1] - 2*u[i] + u[i+1] - h*h*foo(xi);
+            r[i] = u[i-1] - diag*u[i] + u[i+1] - h*h*foo(xi);
         }
+        //Synchronize r
+        if(rank!=0){
+            //receive left boundary
+            MPI_Recv(&(r[0]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            //send left boundary
+            MPI_Send(&(r[1]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+        }
+        if(rank != nprocs-1){
+            //send right boundary
+            MPI_Send(&(r[M]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
+            //recieve right boundary
+            MPI_Recv(&r[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        
         //loop through odds
         for(i=1; i<M+1; i+=2){
+            if( rank==0 && i==1){
+                diag = 3;
+            }else if(rank==nprocs-1 && i==M){
+                diag = 3;
+            }else{
+                diag = 2;
+            }
             u_old = u[i];
-            u[i] += 0.5*r[i];
+            u[i] += r[i]/diag;
             diff = fabs(u[i] - u_old);
             if(diff>largest_diff){largest_diff = diff;}
         }
         //loop through evens
         for(i=2; i<M+1; i+=2){
+            if( rank==0 && i==1){
+                diag = 3;
+            }else if(rank==nprocs-1 && i==M){
+                diag = 3;
+            }else{
+                diag = 2;
+            }
             u_old = u[i];
-            u[i] += 0.5*(r[i] +0.5*r[i-1] + 0.5*r[i+1]);
+            u[i] += (1.0/diag)*(r[i] +(1.0/diag)*r[i-1] + (1.0/diag)*r[i+1]);
             diff = fabs(u[i] - u_old);
             if(diff>largest_diff){largest_diff = diff;}
         }
-        
 
         //find largest update difference and break if below tol
         MPI_Reduce(&largest_diff, &largest_diff_global, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
@@ -114,16 +149,12 @@ int main(int argc, char** argv){
             MPI_Recv(&(u[0]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             //send left boundary
             MPI_Send(&(u[1]), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
-        }else{
-            u[0] = 2 - u[1]; //update boundary ghost node
         }
         if(rank != nprocs-1){
             //send right boundary
             MPI_Send(&(u[M]), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
             //recieve right boundary
             MPI_Recv(&u[M+1], 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        }else{
-            u[M+1] = 2 - u[M]; //update boundary ghost node
         }
     }
 
@@ -153,13 +184,5 @@ int main(int argc, char** argv){
     
     MPI_Finalize();
     return 0;
-
-    /*
-        printf("rank: %d\n",rank);
-        for(i=0; i<M+1; i++){
-            printf("%g\t", u[i]);
-        }
-        printf("\n");
-    */
     
 }
