@@ -1,4 +1,9 @@
 
+hw3/bin/*
+hw3/csv/*
+
+
+
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof
